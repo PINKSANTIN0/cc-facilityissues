@@ -1,0 +1,54 @@
+# ===============================================
+# Docker Compose - Facility Issue Reporting System
+# Telkom University - Cloud Computing UTS
+# Studi Kasus 8: Laporan Kerusakan Fasilitas Kampus
+# ===============================================
+
+version: '3.8'
+
+services:
+  # ---- BACKEND SERVICE ----
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: facility-backend
+    restart: unless-stopped
+    volumes:
+      - facility-data:/var/lib/backend_data     # Named Volume for data persistence
+    networks:
+      - app-net
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---- FRONTEND SERVICE ----
+  frontend:
+    image: nginx:alpine
+    container_name: facility-frontend
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro     # Bind Mount for live UI updates
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - app-net
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+# ---- NAMED VOLUMES ----
+volumes:
+  facility-data:
+    name: facility-data
+    driver: local
+
+# ---- CUSTOM BRIDGE NETWORK ----
+networks:
+  app-net:
+    name: app-net
+    driver: bridge

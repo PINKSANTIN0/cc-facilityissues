@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏗️ Laporan Kerusakan Fasilitas Kampus</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* ============= HEADER ============= */
+        header {
+            text-align: center;
+            padding: 30px 0 20px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            color: #ffffff;
+            margin-bottom: 6px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        header p {
+            color: #a0a0c0;
+            font-size: 0.95rem;
+        }
+
+        .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            color: #c0c0ff;
+            margin-top: 10px;
+        }
+
+        /* ============= STATS BAR ============= */
+        .stats-bar {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 14px 24px;
+            text-align: center;
+            min-width: 140px;
+            backdrop-filter: blur(6px);
+        }
+
+        .stat-card .number {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #7c83ff;
+        }
+
+        .stat-card .label {
+            font-size: 0.78rem;
+            color: #8888aa;
+            margin-top: 2px;
+        }
+
+        /* ============= FORM ============= */
+        .form-section {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 28px;
+            backdrop-filter: blur(8px);
+        }
+
+        .form-section h2 {
+            font-size: 1.2rem;
+            color: #ffffff;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-group label {
+            font-size: 0.82rem;
+            color: #9999bb;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #e0e0e0;
+            font-size: 0.9rem;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #7c83ff;
+            box-shadow: 0 0 0 3px rgba(124, 131, 255, 0.15);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-group select option {
+            background: #1a1a2e;
+            color: #e0e0e0;
+        }
+
+        .btn-submit {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 6px;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.35);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ============= TABLE ============= */
+        .table-section {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 28px;
+            backdrop-filter: blur(8px);
+        }
+
+        .table-section h2 {
+            font-size: 1.2rem;
+            color: #ffffff;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead th {
+            background: rgba(124, 131, 255, 0.15);
+            color: #b0b4ff;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 14px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+
+        tbody td {
+            padding: 12px 14px;
+            font-size: 0.88rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            vertical-align: top;
+        }
+
+        tbody tr:hover {
+            background: rgba(255,255,255,0.03);
+        }
+
+        .category-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .cat-ac { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+        .cat-proyektor { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+        .cat-meja-kursi { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+        .cat-listrik { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+        .cat-kebersihan { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+        .cat-lainnya { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+
+        .status-pending {
+            color: #fbbf24;
+            font-weight: 600;
+        }
+
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            padding: 5px 14px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-delete:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666688;
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        /* ============= TOAST ============= */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 14px 24px;
+            border-radius: 10px;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 500;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success { background: linear-gradient(135deg, #22c55e, #16a34a); }
+        .toast.error { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+        /* ============= FOOTER ============= */
+        footer {
+            text-align: center;
+            padding: 30px 0 20px;
+            color: #555577;
+            font-size: 0.8rem;
+        }
+
+        /* ============= RESPONSIVE ============= */
+        @media (max-width: 640px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            header h1 {
+                font-size: 1.4rem;
+            }
+            .stats-bar {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <h1>🏗️ Laporan Kerusakan Fasilitas Kampus</h1>
+            <p>Facility Issue Reporting System — Telkom University</p>
+            <span class="badge">☁️ Cloud Computing UTS — Studi Kasus 8</span>
+        </header>
+
+        <!-- STATS -->
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="number" id="totalReports">0</div>
+                <div class="label">Total Aduan</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="pendingReports">0</div>
+                <div class="label">Menunggu Proses</div>
+            </div>
+        </div>
+
+        <!-- FORM -->
+        <div class="form-section">
+            <h2>📝 Kirim Aduan Baru</h2>
+            <form id="reportForm" class="form-grid">
+                <div class="form-group">
+                    <label for="location">📍 Lokasi Fasilitas</label>
+                    <input type="text" id="location" placeholder="Contoh: Gedung GKU Lt.3 Ruang 301" required>
+                </div>
+                <div class="form-group">
+                    <label for="category">🏷️ Kategori Kerusakan</label>
+                    <select id="category" required>
+                        <option value="">-- Pilih Kategori --</option>
+                        <option value="AC Mati">❄️ AC Mati / Rusak</option>
+                        <option value="Proyektor Rusak">📽️ Proyektor Rusak</option>
+                        <option value="Meja/Kursi Rusak">🪑 Meja / Kursi Rusak</option>
+                        <option value="Listrik/Stop Kontak">🔌 Listrik / Stop Kontak</option>
+                        <option value="Kebersihan">🧹 Kebersihan</option>
+                        <option value="Lainnya">📦 Lainnya</option>
+                    </select>
+                </div>
+                <div class="form-group full-width">
+                    <label for="description">📄 Deskripsi Kerusakan</label>
+                    <textarea id="description" placeholder="Jelaskan detail kerusakan yang ditemukan..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="reporter">👤 Nama Pelapor</label>
+                    <input type="text" id="reporter" placeholder="Nama lengkap Anda" required>
+                </div>
+                <button type="submit" class="btn-submit" id="btnSubmit">🚀 Kirim Aduan</button>
+            </form>
+        </div>
+
+        <!-- TABLE -->
+        <div class="table-section">
+            <h2>📋 Daftar Aduan Fasilitas</h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Lokasi</th>
+                            <th>Kategori</th>
+                            <th>Deskripsi</th>
+                            <th>Pelapor</th>
+                            <th>Waktu</th>
+                            <th>Status</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportTableBody">
+                        <!-- Dynamic rows here -->
+                    </tbody>
+                </table>
+                <div id="emptyState" class="empty-state" style="display: none;">
+                    <div class="icon">📭</div>
+                    <p>Belum ada aduan. Kirim laporan kerusakan pertama!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <footer>
+            <p>Telkom University &copy; 2026 — Cloud Computing | Docker &middot; Nginx &middot; Jenkins CI/CD</p>
+        </footer>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ============= CONFIG =============
+        const API_URL = "/api/reports";
+
+        // ============= TOAST =============
+        function showToast(message, type = "success") {
+            const toast = document.getElementById("toast");
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => { toast.classList.remove("show"); }, 3000);
+        }
+
+        // ============= GET CATEGORY CSS CLASS =============
+        function getCategoryClass(category) {
+            const map = {
+                "AC Mati": "cat-ac",
+                "Proyektor Rusak": "cat-proyektor",
+                "Meja/Kursi Rusak": "cat-meja-kursi",
+                "Listrik/Stop Kontak": "cat-listrik",
+                "Kebersihan": "cat-kebersihan",
+                "Lainnya": "cat-lainnya"
+            };
+            return map[category] || "cat-lainnya";
+        }
+
+        // ============= FETCH & RENDER REPORTS =============
+        async function loadReports() {
+            try {
+                const res = await fetch(API_URL);
+                const json = await res.json();
+
+                const tbody = document.getElementById("reportTableBody");
+                const emptyState = document.getElementById("emptyState");
+                const reports = json.data || [];
+
+                // Update stats
+                document.getElementById("totalReports").textContent = reports.length;
+                document.getElementById("pendingReports").textContent =
+                    reports.filter(r => r.status === "Pending").length;
+
+                if (reports.length === 0) {
+                    tbody.innerHTML = "";
+                    emptyState.style.display = "block";
+                    return;
+                }
+
+                emptyState.style.display = "none";
+                tbody.innerHTML = reports.map((report, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${escapeHtml(report.location)}</td>
+                        <td><span class="category-badge ${getCategoryClass(report.category)}">${escapeHtml(report.category)}</span></td>
+                        <td>${escapeHtml(report.description)}</td>
+                        <td>${escapeHtml(report.reporter)}</td>
+                        <td>${escapeHtml(report.timestamp || "-")}</td>
+                        <td><span class="status-pending">${escapeHtml(report.status || "Pending")}</span></td>
+                        <td><button class="btn-delete" onclick="deleteReport(${index})">🗑️ Hapus</button></td>
+                    </tr>
+                `).join("");
+
+            } catch (err) {
+                console.error("Failed to load reports:", err);
+                showToast("Gagal memuat data aduan!", "error");
+            }
+        }
+
+        // ============= POST NEW REPORT =============
+        async function submitReport(e) {
+            e.preventDefault();
+            const btn = document.getElementById("btnSubmit");
+            btn.disabled = true;
+            btn.textContent = "⏳ Mengirim...";
+
+            const payload = {
+                location: document.getElementById("location").value.trim(),
+                category: document.getElementById("category").value,
+                description: document.getElementById("description").value.trim(),
+                reporter: document.getElementById("reporter").value.trim()
+            };
+
+            try {
+                const res = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                const json = await res.json();
+
+                if (res.ok) {
+                    showToast("✅ Aduan berhasil dikirim!");
+                    document.getElementById("reportForm").reset();
+                    await loadReports();
+                } else {
+                    showToast(json.message || "Gagal mengirim aduan", "error");
+                }
+            } catch (err) {
+                console.error("Submit error:", err);
+                showToast("Gagal mengirim aduan!", "error");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "🚀 Kirim Aduan";
+            }
+        }
+
+        // ============= DELETE REPORT =============
+        async function deleteReport(index) {
+            if (!confirm(`Hapus aduan #${index + 1}? Tindakan ini tidak dapat dibatalkan.`)) return;
+
+            try {
+                const res = await fetch(`${API_URL}?index=${index}`, { method: "DELETE" });
+                const json = await res.json();
+
+                if (res.ok) {
+                    showToast("🗑️ Aduan berhasil dihapus!");
+                    await loadReports();
+                } else {
+                    showToast(json.message || "Gagal menghapus", "error");
+                }
+            } catch (err) {
+                console.error("Delete error:", err);
+                showToast("Gagal menghapus aduan!", "error");
+            }
+        }
+
+        // ============= ESCAPE HTML =============
+        function escapeHtml(text) {
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============= INIT =============
+        document.getElementById("reportForm").addEventListener("submit", submitReport);
+        loadReports();
+    </script>
+</body>
+</html>
