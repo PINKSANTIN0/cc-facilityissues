@@ -4,7 +4,7 @@ Telkom University - Cloud Computing UTS
 Studi Kasus 8: Laporan Kerusakan Fasilitas Kampus
 """
 
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from urllib.parse import urlparse, parse_qs
 import json
@@ -40,6 +40,9 @@ def save_data(data):
 
 class FacilityReportHandler(BaseHTTPRequestHandler):
     """HTTP Request Handler for Facility Issue Reports."""
+
+    # Putuskan koneksi yang diam lebih dari 10 detik (mis. preconnect browser)
+    timeout = 10
 
     def _set_headers(self, status=200, content_type="application/json"):
         self.send_response(status)
@@ -193,7 +196,9 @@ class FacilityReportHandler(BaseHTTPRequestHandler):
 
 def run_server(host="0.0.0.0", port=5000):
     """Start the HTTP server."""
-    server = HTTPServer((host, port), FacilityReportHandler)
+    # Threading: tiap koneksi dilayani thread sendiri, sehingga satu koneksi
+    # yang diam tidak menahan request lain. Akses file dijaga oleh `lock`.
+    server = ThreadingHTTPServer((host, port), FacilityReportHandler)
     print(f"🚀 Facility Report API Server running on http://{host}:{port}")
     print(f"📂 Data stored in: {DATA_FILE}")
     print(f"📋 Endpoints:")
