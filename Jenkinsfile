@@ -3,13 +3,23 @@
 // Facility Issue Reporting System
 // Telkom University - Cloud Computing UTS
 // ===============================================
+//
+// Jenkins berjalan DI DALAM kontainer dan mengendalikan Docker milik host
+// lewat /var/run/docker.sock. Konsekuensinya:
+//   1. Bind mount dibaca dari sisi HOST, bukan dari workspace Jenkins.
+//      Maka file frontend disalin ke /deploy (folder host yang di-mount ke
+//      Jenkins) dan compose memakai HOST_DEPLOY_DIR (path folder itu di host).
+//   2. "localhost" di dalam Jenkins adalah kontainer Jenkins sendiri.
+//      Aplikasi diakses lewat host.docker.internal.
+//
+// HOST_DEPLOY_DIR diisi saat kontainer Jenkins dibuat (lihat README).
 
 pipeline {
     agent any
 
     environment {
-        COMPOSE_PROJECT = 'facility-report'
-        DOCKER_COMPOSE  = 'docker-compose'
+        DEPLOY_DIR = '/deploy'                  // folder deploy dilihat dari dalam Jenkins
+        APP_HOST   = 'host.docker.internal'     // alamat host dilihat dari dalam Jenkins
     }
 
     stages {
@@ -27,16 +37,15 @@ pipeline {
         stage('Syntax Check') {
             steps {
                 echo '🔍 Stage 2: Running syntax checks...'
-                // Check Python syntax
-                sh 'python3 -c "import py_compile; py_compile.compile(\'app.py\', doraise=True)"'
+
+                sh 'python3 -m py_compile app.py'
                 echo '✅ Python syntax OK.'
 
-                // Validate docker-compose file
-                sh "${DOCKER_COMPOSE} config --quiet"
+                sh 'docker compose config --quiet'
                 echo '✅ Docker Compose syntax OK.'
 
-                // Check if frontend files exist
-                sh 'test -f frontend/index.html && echo "✅ Frontend index.html exists."'
+                sh 'test -f frontend/index.html && test -f nginx.conf'
+                echo '✅ Frontend files exist.'
             }
         }
 
@@ -44,7 +53,7 @@ pipeline {
         stage('Build Image') {
             steps {
                 echo '🔨 Stage 3: Building Docker images...'
-                sh "${DOCKER_COMPOSE} build --no-cache"
+                sh 'docker compose build --no-cache'
                 echo '✅ Docker images built successfully.'
             }
         }
@@ -53,13 +62,28 @@ pipeline {
         stage('Automated Deployment') {
             steps {
                 echo '🚀 Stage 4: Deploying application stack...'
-                // Stop any existing containers
-                sh "${DOCKER_COMPOSE} down --remove-orphans || true"
-                // Deploy fresh stack
-                sh "${DOCKER_COMPOSE} up -d"
+
+                // Pastikan Jenkins dijalankan dengan folder deploy (lihat README)
+                sh '''
+                    if [ -z "$HOST_DEPLOY_DIR" ] || [ ! -d "$DEPLOY_DIR" ]; then
+                        echo "❌ HOST_DEPLOY_DIR belum di-set atau $DEPLOY_DIR belum di-mount."
+                        echo "   Jalankan ulang kontainer Jenkins sesuai README (bagian Jenkins)."
+                        exit 1
+                    fi
+                '''
+
+                // Salin file UI ke folder host yang di-bind-mount oleh Nginx
+                sh '''
+                    mkdir -p "$DEPLOY_DIR/frontend"
+                    cp -r frontend/. "$DEPLOY_DIR/frontend/"
+                    cp nginx.conf "$DEPLOY_DIR/nginx.conf"
+                '''
+
+                // Hentikan stack lama (Named Volume TIDAK dihapus), lalu jalankan yang baru
+                sh 'docker compose down --remove-orphans || true'
+                sh 'docker rm -f facility-backend facility-frontend 2>/dev/null || true'
+                sh 'docker compose up -d'
                 echo '✅ Application deployed successfully.'
-                // Wait for services to be ready
-                sh 'sleep 10'
             }
         }
 
@@ -68,39 +92,53 @@ pipeline {
             steps {
                 echo '🏥 Stage 5: Running health checks...'
 
-                // Check backend health
+                // Tunggu backend siap (maks. 30 detik)
                 sh '''
                     echo "Checking Backend API..."
-                    curl -sf http://localhost:5000/health || (echo "❌ Backend health check FAILED" && exit 1)
-                    echo ""
-                    echo "✅ Backend API is healthy."
+                    for i in $(seq 1 15); do
+                        if curl -sf "http://$APP_HOST:5000/health"; then
+                            echo ""
+                            echo "✅ Backend API is healthy."
+                            exit 0
+                        fi
+                        sleep 2
+                    done
+                    echo "❌ Backend health check FAILED"
+                    exit 1
                 '''
 
-                // Check frontend health
+                // Frontend + jalur reverse proxy Nginx -> backend (DNS service name)
                 sh '''
                     echo "Checking Frontend..."
-                    curl -sf http://localhost:8080/ || (echo "❌ Frontend health check FAILED" && exit 1)
-                    echo ""
+                    curl -sf -o /dev/null "http://$APP_HOST:8080/" || (echo "❌ Frontend health check FAILED" && exit 1)
                     echo "✅ Frontend is healthy."
+
+                    echo "Checking Nginx reverse proxy -> backend..."
+                    curl -sf -o /dev/null "http://$APP_HOST:8080/api/reports" || (echo "❌ Reverse proxy check FAILED" && exit 1)
+                    echo "✅ Reverse proxy is working."
                 '''
 
-                // Test API endpoints
+                // Uji POST -> GET -> DELETE. Yang dihapus adalah data uji itu sendiri
+                // (index terakhir), bukan aduan asli milik pengguna.
                 sh '''
+                    API="http://$APP_HOST:5000/reports"
+
                     echo "Testing POST /reports..."
-                    curl -sf -X POST http://localhost:5000/reports \
+                    curl -sf -X POST "$API" \
                         -H "Content-Type: application/json" \
-                        -d '{"location":"Test Room","category":"AC Mati","description":"Health check test","reporter":"Jenkins CI"}' \
+                        -d '{"location":"Test Room","category":"Lainnya","description":"Health check test","reporter":"Jenkins CI"}' \
                         || (echo "❌ POST test FAILED" && exit 1)
                     echo ""
                     echo "✅ POST endpoint working."
 
                     echo "Testing GET /reports..."
-                    curl -sf http://localhost:5000/reports || (echo "❌ GET test FAILED" && exit 1)
-                    echo ""
-                    echo "✅ GET endpoint working."
+                    COUNT=$(curl -sf "$API" | python3 -c "import sys, json; print(json.load(sys.stdin)['count'])") \
+                        || (echo "❌ GET test FAILED" && exit 1)
+                    echo "✅ GET endpoint working. Total reports: $COUNT"
 
-                    echo "Testing DELETE /reports?index=0..."
-                    curl -sf -X DELETE "http://localhost:5000/reports?index=0" || (echo "❌ DELETE test FAILED" && exit 1)
+                    LAST=$((COUNT - 1))
+                    echo "Testing DELETE /reports?index=$LAST (data uji)..."
+                    curl -sf -X DELETE "$API?index=$LAST" || (echo "❌ DELETE test FAILED" && exit 1)
                     echo ""
                     echo "✅ DELETE endpoint working."
                 '''
@@ -122,7 +160,7 @@ pipeline {
         }
         failure {
             echo '❌ Pipeline FAILED. Check logs above for details.'
-            sh "${DOCKER_COMPOSE} logs || true"
+            sh 'docker compose logs --tail 50 || true'
         }
         always {
             echo '📊 Pipeline execution completed.'

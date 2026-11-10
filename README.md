@@ -79,6 +79,8 @@ facility-issue-reporting/
 ├── docker-compose.yml      # Orchestration seluruh stack
 ├── nginx.conf              # Konfigurasi Nginx (reverse proxy)
 ├── Jenkinsfile             # Declarative CI/CD Pipeline
+├── jenkins/
+│   └── Dockerfile          # Image Jenkins + Docker CLI + Python 3
 ├── README.md               # Dokumentasi proyek (file ini)
 └── frontend/
     └── index.html          # Frontend UI (HTML & Vanilla JS)
@@ -95,14 +97,14 @@ facility-issue-reporting/
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/<username>/<repo-name>.git
-cd <repo-name>
+git clone https://github.com/PINKSANTIN0/cc-facilityissues.git
+cd cc-facilityissues
 ```
 
 ### 2. Jalankan dengan Docker Compose
 ```bash
 # Build & jalankan seluruh stack
-docker-compose up -d --build
+docker compose up -d --build
 
 # Cek status kontainer
 docker ps
@@ -137,7 +139,7 @@ curl -X DELETE "http://localhost:5000/reports?index=0"
 docker rm -f facility-backend
 
 # Jalankan ulang
-docker-compose up -d
+docker compose up -d
 
 # Verifikasi data masih ada
 curl http://localhost:5000/reports
@@ -147,25 +149,49 @@ curl http://localhost:5000/reports
 ### 6. Stop & Cleanup
 ```bash
 # Stop semua kontainer
-docker-compose down
+docker compose down
 
 # Stop & hapus volume (HATI-HATI: data akan hilang!)
-docker-compose down -v
+docker compose down -v
 ```
 
 ---
 
 ## 🔧 Konfigurasi Jenkins CI/CD
 
-### 1. Instal Jenkins
+### 1. Jalankan Jenkins (di dalam kontainer Docker)
+
+Jenkins berjalan sebagai kontainer dan mengendalikan Docker milik host lewat `docker.sock`.
+Ada dua hal yang perlu disiapkan karena itu:
+
+- **Image khusus** ([jenkins/Dockerfile](jenkins/Dockerfile)): image Jenkins resmi tidak punya `docker`, `docker compose`, dan `python3` yang dipakai pipeline.
+- **Folder deploy di host**: bind mount selalu dibaca Docker dari sisi *host*, bukan dari workspace di dalam kontainer Jenkins. Pipeline menyalin `frontend/` dan `nginx.conf` ke folder ini, lalu Nginx melakukan bind mount ke folder tersebut.
+
 ```bash
-# Jalankan Jenkins via Docker
-docker run -d --name jenkins \
-  -p 8081:8080 -p 50000:50000 \
-  -v jenkins_home:/var/jenkins_home \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  jenkins/jenkins:lts
+# Build image Jenkins
+docker build -t jenkins-facility:lts jenkins/
 ```
+
+Jalankan Jenkins (contoh Windows / Docker Desktop, sesuaikan path folder deploy):
+
+```bash
+docker run -d --name jenkins --restart unless-stopped -p 9090:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home -v /var/run/docker.sock:/var/run/docker.sock -v C:/Users/patar/facility-deploy:/deploy -e HOST_DEPLOY_DIR=C:/Users/patar/facility-deploy jenkins-facility:lts
+```
+
+| Opsi | Fungsi |
+|------|--------|
+| `-v jenkins_home:/var/jenkins_home` | Named Volume untuk data & konfigurasi Jenkins |
+| `-v /var/run/docker.sock:...` | Jenkins memakai Docker daemon milik host |
+| `-v <folder-host>:/deploy` | Folder deploy host, terlihat sebagai `/deploy` di dalam Jenkins |
+| `-e HOST_DEPLOY_DIR=<folder-host>` | Path folder yang sama dilihat dari host, dipakai `docker-compose.yml` untuk bind mount |
+
+Jenkins dapat diakses di [http://localhost:9090](http://localhost:9090). Password awal:
+
+```bash
+docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+Plugin yang dibutuhkan: **Git**, **Pipeline**, dan **GitHub** (termasuk dalam *suggested plugins*).
 
 ### 2. Buat Personal Access Token (PAT) GitHub
 1. Login GitHub → **Settings** → **Developer settings**
@@ -186,17 +212,28 @@ docker run -d --name jenkins \
 2. **Build Triggers**: ☑️ *GitHub hook trigger for GITScm polling*
 3. **Pipeline** → Definition: **Pipeline script from SCM**
    - SCM: **Git**
-   - Repository URL: `https://github.com/<username>/<repo>.git`
+   - Repository URL: `https://github.com/PINKSANTIN0/cc-facilityissues.git`
    - Credentials: pilih yang sudah ditambahkan
    - Branch: `*/main`
    - Script Path: `Jenkinsfile`
 
 ### 5. Setup GitHub Webhook
+
+GitHub harus bisa menjangkau Jenkins dari internet. Jika Jenkins berjalan di laptop, buka tunnel dengan [ngrok](https://ngrok.com/) terlebih dahulu:
+
+```bash
+ngrok http 9090
+```
+
+Salin URL `https://xxxx.ngrok-free.app` yang muncul, lalu:
+
 1. Di repository GitHub → **Settings** → **Webhooks** → **Add webhook**
-2. Payload URL: `http://<jenkins-server-ip>:8081/github-webhook/`
+2. Payload URL: `https://xxxx.ngrok-free.app/github-webhook/` (garis miring di akhir wajib ada)
 3. Content type: `application/json`
 4. Events: **Just the push event**
-5. ☑️ Active → **Add webhook**
+5. ☑️ Active → **Add webhook** (pastikan muncul centang hijau pada *Recent Deliveries*)
+
+> Jalankan **Build Now** satu kali secara manual setelah job dibuat, agar Jenkins mengenali repository dan trigger webhook aktif.
 
 ### 6. Testing CI/CD Pipeline
 ```bash
@@ -231,8 +268,9 @@ git push origin main
 ## 📌 Catatan Penting
 
 - **Named Volume (`facility-data`)**: Menyimpan `facility_reports.json` — data tetap aman meskipun kontainer dihapus (`docker rm -f`).
-- **Bind Mount (`./frontend`)**: Frontend HTML di-mount read-only ke Nginx, perubahan UI langsung terlihat tanpa rebuild image.
+- **Bind Mount (`./frontend`)**: Frontend HTML di-mount read-only ke Nginx, perubahan UI langsung terlihat tanpa rebuild image. Saat di-deploy oleh Jenkins, sumber bind mount adalah folder deploy di host (`HOST_DEPLOY_DIR`), yang diisi pipeline pada stage *Automated Deployment*.
 - **Custom Bridge Network (`app-net`)**: Frontend dan Backend berkomunikasi via DNS Docker (service name `backend`), terisolasi dari jaringan luar.
+- **Health Check pipeline**: Jenkins mengakses aplikasi lewat `host.docker.internal` (bukan `localhost`, karena Jenkins ada di dalam kontainer), menguji POST → GET → DELETE, dan hanya menghapus data uji miliknya sendiri.
 - **Nginx Reverse Proxy**: Request ke `/api/reports` di-proxy ke `http://backend:5000/reports`, sehingga frontend dan backend berjalan di origin yang sama (menghindari CORS).
 
 ---

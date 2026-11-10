@@ -4,7 +4,8 @@
 # Studi Kasus 8: Laporan Kerusakan Fasilitas Kampus
 # ===============================================
 
-version: '3.8'
+# Nama project dikunci supaya sama saat dijalankan lokal maupun dari Jenkins
+name: facility-report
 
 services:
   # ---- BACKEND SERVICE ----
@@ -32,8 +33,12 @@ services:
     container_name: facility-frontend
     restart: unless-stopped
     volumes:
-      - ./frontend:/usr/share/nginx/html:ro     # Bind Mount for live UI updates
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Bind Mount ke folder host untuk live UI update.
+      # Lokal: HOST_DEPLOY_DIR kosong -> pakai folder project ini (.)
+      # Jenkins (di dalam kontainer): HOST_DEPLOY_DIR = path folder deploy di HOST,
+      # karena Docker daemon membaca path bind mount dari sisi host.
+      - ${HOST_DEPLOY_DIR:-.}/frontend:/usr/share/nginx/html:ro
+      - ${HOST_DEPLOY_DIR:-.}/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - app-net
     ports:
