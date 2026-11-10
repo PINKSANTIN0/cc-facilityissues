@@ -5,6 +5,8 @@ Studi Kasus 8: Laporan Kerusakan Fasilitas Kampus
 """
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from datetime import datetime
+from urllib.parse import urlparse, parse_qs
 import json
 import os
 import threading
@@ -28,8 +30,12 @@ def load_data():
 def save_data(data):
     """Save facility reports to JSON file."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
+    # Tulis ke file sementara lalu rename, supaya file data tidak pernah
+    # setengah tertulis kalau kontainer dimatikan paksa di tengah proses.
+    tmp_file = DATA_FILE + ".tmp"
+    with open(tmp_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+    os.replace(tmp_file, DATA_FILE)
 
 
 class FacilityReportHandler(BaseHTTPRequestHandler):
@@ -47,13 +53,24 @@ class FacilityReportHandler(BaseHTTPRequestHandler):
         self._set_headers(status)
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
 
+    def _route(self):
+        """Return the request path without query string and trailing slash."""
+        return urlparse(self.path).path.rstrip("/") or "/"
+
+    def _method_not_allowed(self):
+        self._send_json({"status": "error", "message": "Method not allowed"}, 405)
+
+    do_PUT = _method_not_allowed
+    do_PATCH = _method_not_allowed
+
     def do_OPTIONS(self):
         """Handle CORS preflight requests."""
         self._set_headers(204)
 
     def do_GET(self):
         """GET /reports - Retrieve all facility issue reports."""
-        if self.path == "/reports" or self.path == "/reports/":
+        route = self._route()
+        if route == "/reports":
             with lock:
                 reports = load_data()
             self._send_json({
@@ -61,22 +78,29 @@ class FacilityReportHandler(BaseHTTPRequestHandler):
                 "count": len(reports),
                 "data": reports
             })
-        elif self.path == "/health":
+        elif route == "/health":
             self._send_json({"status": "healthy", "service": "facility-report-api"})
         else:
             self._send_json({"status": "error", "message": "Endpoint not found"}, 404)
 
     def do_POST(self):
         """POST /reports - Submit a new facility issue report."""
-        if self.path == "/reports" or self.path == "/reports/":
+        if self._route() == "/reports":
             try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                if content_length == 0:
+                try:
+                    content_length = int(self.headers.get("Content-Length", 0))
+                except ValueError:
+                    content_length = 0
+                if content_length <= 0:
                     self._send_json({"status": "error", "message": "Request body is empty"}, 400)
                     return
 
                 body = self.rfile.read(content_length)
                 new_report = json.loads(body.decode("utf-8"))
+
+                if not isinstance(new_report, dict):
+                    self._send_json({"status": "error", "message": "Request body must be a JSON object"}, 400)
+                    return
 
                 # Validate required fields
                 required_fields = ["location", "category", "description", "reporter"]
@@ -88,8 +112,15 @@ class FacilityReportHandler(BaseHTTPRequestHandler):
                     }, 400)
                     return
 
+                not_text = [f for f in required_fields if not isinstance(new_report[f], str)]
+                if not_text:
+                    self._send_json({
+                        "status": "error",
+                        "message": f"Fields must be text: {', '.join(not_text)}"
+                    }, 400)
+                    return
+
                 # Build report entry
-                from datetime import datetime
                 report_entry = {
                     "location": new_report["location"].strip(),
                     "category": new_report["category"].strip(),
@@ -110,7 +141,7 @@ class FacilityReportHandler(BaseHTTPRequestHandler):
                     "data": report_entry
                 }, 201)
 
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, UnicodeDecodeError):
                 self._send_json({"status": "error", "message": "Invalid JSON format"}, 400)
             except Exception as e:
                 self._send_json({"status": "error", "message": str(e)}, 500)
@@ -119,12 +150,10 @@ class FacilityReportHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         """DELETE /reports?index=X - Delete a specific facility issue report by index."""
-        if self.path.startswith("/reports"):
+        if self._route() == "/reports":
             try:
                 # Parse index from query string
-                from urllib.parse import urlparse, parse_qs
-                parsed = urlparse(self.path)
-                params = parse_qs(parsed.query)
+                params = parse_qs(urlparse(self.path).query)
 
                 if "index" not in params:
                     self._send_json({"status": "error", "message": "Missing 'index' query parameter"}, 400)

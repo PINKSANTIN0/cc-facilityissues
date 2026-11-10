@@ -22,5 +22,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
+# Plugin yang dibutuhkan pipeline, dipasang otomatis saat Jenkins pertama start:
+#   workflow-aggregator -> Declarative Pipeline (Jenkinsfile)
+#   git                 -> checkout repository
+#   github              -> trigger "GitHub hook trigger for GITScm polling" (Webhook)
+#   pipeline-stage-view -> tampilan per-stage di halaman job
+RUN jenkins-plugin-cli --plugins workflow-aggregator git github pipeline-stage-view
+
 # Tetap sebagai root agar bisa mengakses /var/run/docker.sock milik host
 # dan menulis ke folder deploy yang di-bind-mount dari host.

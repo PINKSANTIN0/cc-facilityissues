@@ -164,7 +164,7 @@ docker compose down -v
 Jenkins berjalan sebagai kontainer dan mengendalikan Docker milik host lewat `docker.sock`.
 Ada dua hal yang perlu disiapkan karena itu:
 
-- **Image khusus** ([jenkins/Dockerfile](jenkins/Dockerfile)): image Jenkins resmi tidak punya `docker`, `docker compose`, dan `python3` yang dipakai pipeline.
+- **Image khusus** ([jenkins/Dockerfile](jenkins/Dockerfile)): image Jenkins resmi tidak punya `docker`, `docker compose`, dan `python3` yang dipakai pipeline. Image ini juga langsung memasang plugin Jenkins yang dibutuhkan.
 - **Folder deploy di host**: bind mount selalu dibaca Docker dari sisi *host*, bukan dari workspace di dalam kontainer Jenkins. Pipeline menyalin `frontend/` dan `nginx.conf` ke folder ini, lalu Nginx melakukan bind mount ke folder tersebut.
 
 ```bash
@@ -191,7 +191,7 @@ Jenkins dapat diakses di [http://localhost:9090](http://localhost:9090). Passwor
 docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 ```
 
-Plugin yang dibutuhkan: **Git**, **Pipeline**, dan **GitHub** (termasuk dalam *suggested plugins*).
+Plugin yang dibutuhkan pipeline (**Pipeline**, **Git**, **GitHub**, **Pipeline Stage View**) sudah terpasang otomatis lewat image, jadi pada wizard awal cukup masukkan password di atas lalu buat user admin.
 
 ### 2. Buat Personal Access Token (PAT) GitHub
 1. Login GitHub → **Settings** → **Developer settings**
